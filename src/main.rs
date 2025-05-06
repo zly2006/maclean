@@ -467,7 +467,12 @@ fn main() -> io::Result<()> {
     if clean_all {
         for (entry, _) in entries_with_size {
             println!("正在清理 {}", entry.path);
-            std::fs::remove_dir_all(&entry.path)?;
+            let result = std::fs::remove_dir_all(&entry.path);
+            if let Err(e) = result {
+                if e.kind() != io::ErrorKind::NotFound {
+                    println!("清理 {} 失败: {}", entry.path, e.to_string().red().bold());
+                }
+            }
         }
     }
     Ok(())
