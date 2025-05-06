@@ -3,8 +3,9 @@ use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use crossterm::{
     cursor, execute,
     style::{self, Color, Stylize},
-    terminal::{self, Clear, ClearType},
+    terminal::{Clear, ClearType},
 };
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
 use walkdir::WalkDir;
@@ -106,6 +107,53 @@ fn clean_electron(clean_entries: &mut Vec<CleanEntry>, root: String, app: &str) 
         description: format!("{app} 日志"),
         score: 1.0,
     });
+}
+
+fn clean_jetbrains(clean_entries: &mut Vec<CleanEntry>, root: String) {
+    // ("PyCharm", "2024.3")
+    let mut dirs: Vec<(String, String)> = vec![];
+    if let Ok(read_dir) = std::fs::read_dir(&root) {
+        for entry in read_dir {
+            if let Ok(entry) = entry {
+                if entry.metadata().is_ok() && entry.metadata().unwrap().is_dir() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    let mut app_name = String::new();
+                    for c in name.chars() {
+                        if c.is_alphabetic() {
+                            app_name.push(c);
+                        } else {
+                            break;
+                        }
+                    }
+                    let version = name[app_name.len()..].to_string();
+                    if version.len() > 0 && version.contains('.') {
+                        dirs.push((app_name, version));
+                    }
+                }
+            }
+        }
+    }
+    let mut keep_dirs: HashMap<String, String> = HashMap::new();
+    for (app_name, version) in dirs {
+        if let Some(old_version) = keep_dirs.get(&app_name) {
+            if version > *old_version {
+                clean_entries.push(CleanEntry {
+                    path: format!("{root}/{app_name}{old_version}"),
+                    description: format!("{app_name} 的旧版本 {old_version}"),
+                    score: 0.8,
+                });
+                keep_dirs.insert(app_name, version);
+            } else {
+                clean_entries.push(CleanEntry {
+                    path: format!("{root}/{app_name}{version}"),
+                    description: format!("{app_name} 的旧版本 {version}"),
+                    score: 0.8,
+                });
+            }
+        } else {
+            keep_dirs.insert(app_name, version);
+        }
+    }
 }
 
 #[allow(unused)]
@@ -247,6 +295,14 @@ fn main() -> io::Result<()> {
                 }
             }
         }
+        clean_jetbrains(
+            &mut clean_entries,
+            format!("/Users/{username}/Library/Application Support/JetBrains"),
+        );
+        clean_jetbrains(
+            &mut clean_entries,
+            format!("/Users/{username}/Library/Caches/JetBrains"),
+        );
     }
 
     println!("当前用户：{}", username);
@@ -290,7 +346,9 @@ fn main() -> io::Result<()> {
         let size_result = check_size(path);
 
         if let Ok(size) = size_result {
-            entries_with_size.push((entry, size));
+            if size > 0 {
+                entries_with_size.push((entry, size));
+            }
         }
     }
 
