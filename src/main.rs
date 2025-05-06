@@ -7,7 +7,8 @@ use crossterm::{
 };
 use std::collections::HashMap;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 use walkdir::WalkDir;
 
 // 定义一个函数来格式化文件大小
@@ -271,7 +272,76 @@ fn main() -> io::Result<()> {
             description: "JetBrains 日志".into(),
             score: 1.0,
         });
-        //todo: Library/Caches, IdeaProjects(target/build/.gradle), WebstormProjects(node_modules)
+        clean_entries.push(CleanEntry {
+            path: format!("/Users/{username}/Library/Caches/Microsoft Edge"),
+            description: "Microsoft Edge 缓存".into(),
+            score: 1.0,
+        });
+        clean_entries.push(CleanEntry {
+            path: format!("/Users/{username}/Library/Caches/Google/Chrome"),
+            description: "Google Chrome 缓存".into(),
+            score: 1.0,
+        });
+        clean_entries.push(CleanEntry {
+            path: format!("/Users/{username}/Library/Caches/Google/Jib"),
+            description: "Google Jib 缓存".into(),
+            score: 1.0,
+        });
+        clean_entries.push(CleanEntry {
+            path: format!("/Users/{username}/Library/Caches/com.hnc.Discord.ShipIt"),
+            description: "Discord 自动更新缓存".into(),
+            score: 1.0,
+        });
+        clean_entries.push(CleanEntry {
+            path: format!("/Users/{username}/Library/Caches/ms-playwright"),
+            description: "Playwright 缓存".into(),
+            score: 1.0,
+        });
+        clean_entries.push(CleanEntry {
+            path: format!("/Users/{username}/Library/Caches/Homebrew/downloads"),
+            description: "Homebrew 下载缓存".into(),
+            score: 1.0,
+        });
+        #[cfg(feature = "experimental")]
+        clean_entries.push(CleanEntry {
+            path: format!("/Users/{username}/Library/Caches/typescript"),
+            description: "typescript 缓存".into(),
+            score: 1.0,
+        });
+        clean_entries.push(CleanEntry {
+            path: format!("/Users/{username}/Library/Caches/electron"),
+            description: "未知来源 electron 二进制缓存".into(),
+            score: 1.0,
+        });
+        if let Ok(read_dir) = std::fs::read_dir(format!("/Users/{username}/IdeaProjects")) {
+            for entry in read_dir {
+                if let Ok(entry) = entry {
+                    if entry.metadata()?.is_dir() {
+                        walk_and_delete(
+                            &mut clean_entries,
+                            [".gradle", "out", "build"],
+                            entry.path(),
+                            30 * 24 * 60 * 60,
+                        )
+                    }
+                }
+            }
+        }
+        #[cfg(feature = "experimental")]
+        if let Ok(read_dir) = std::fs::read_dir(format!("/Users/{username}/WebstormProjects")) {
+            for entry in read_dir {
+                if let Ok(entry) = entry {
+                    if entry.metadata()?.is_dir() {
+                        walk_and_delete(
+                            &mut clean_entries,
+                            ["node_modules"],
+                            entry.path(),
+                            30 * 24 * 60 * 60,
+                        )
+                    }
+                }
+            }
+        }
         if let Ok(read_dir) = std::fs::read_dir(format!(
             "/Users/{username}/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ"
         )) {
@@ -401,4 +471,74 @@ fn main() -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+fn walk_and_delete<const N: usize>(
+    clean_entries: &mut Vec<CleanEntry>,
+    to_delete: [&str; N],
+    root: PathBuf,
+    // should be 30 days
+    time_unused: u64,
+) {
+    for entry in WalkDir::new(&root) {
+        if let Ok(entry) = entry {
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_dir() {
+                    let name = entry.file_name().to_str().unwrap_or("");
+                    if to_delete.contains(&name) {
+                        let mut modified_time =
+                            metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+                        let mut access_time = metadata.accessed().unwrap_or(SystemTime::UNIX_EPOCH);
+                        let mut created_time = metadata.created().unwrap_or(SystemTime::UNIX_EPOCH);
+                        for entry_in_to_del in WalkDir::new(entry.path()) {
+                            if let Ok(entry_in_to_del) = entry_in_to_del {
+                                if let Ok(metadata) = entry_in_to_del.metadata() {
+                                    if let Ok(modified) = metadata.modified() {
+                                        if modified > modified_time {
+                                            modified_time = modified;
+                                        }
+                                    }
+                                    if let Ok(accessed) = metadata.accessed() {
+                                        if accessed > access_time {
+                                            access_time = accessed;
+                                        }
+                                    }
+                                    if let Ok(created) = metadata.created() {
+                                        if created > created_time {
+                                            created_time = created;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        let now = SystemTime::now();
+                        let modified_duration =
+                            now.duration_since(modified_time).unwrap_or_default();
+                        let access_duration = now.duration_since(access_time).unwrap_or_default();
+                        let created_duration = now.duration_since(created_time).unwrap_or_default();
+                        if modified_duration.as_secs() > time_unused
+                            || access_duration.as_secs() > time_unused
+                            || created_duration.as_secs() > time_unused
+                        {
+                            clean_entries.push(CleanEntry {
+                                path: entry.path().to_string_lossy().into(),
+                                description: format!(
+                                    "{} 中长时间不用的 {}",
+                                    entry
+                                        .path()
+                                        .parent()
+                                        .unwrap()
+                                        .file_name()
+                                        .unwrap()
+                                        .to_string_lossy(),
+                                    name
+                                ),
+                                score: 0.8,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
