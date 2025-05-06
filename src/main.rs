@@ -32,7 +32,6 @@ fn format_size(size: u64) -> String {
 }
 
 fn check_size(path: &Path) -> Result<u64, io::Error> {
-    // 检查路径是否存在且是目录
     if !path.exists() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
@@ -53,27 +52,22 @@ fn check_size(path: &Path) -> Result<u64, io::Error> {
     }
 
     let mut total_size: u64 = 0;
-
-    // 使用 WalkDir 遍历目录树
     for entry in WalkDir::new(path) {
         match entry {
             Ok(entry) => {
                 let metadata = entry.metadata();
                 match metadata {
                     Ok(metadata) => {
-                        // 只计算文件的大小
                         if metadata.is_file() {
                             total_size += metadata.len();
                         }
                     }
                     Err(e) => {
-                        // 处理获取文件元数据时的错误 (例如权限问题)
                         eprintln!("警告: 无法获取文件元数据 '{:?}': {}", entry.path(), e);
                     }
                 }
             }
             Err(e) => {
-                // 处理遍历目录时的错误 (例如没有读取目录权限)
                 eprintln!("警告: 遍历目录时出错: {}", e);
             }
         }
@@ -403,12 +397,6 @@ fn main() -> io::Result<()> {
             ),
             cursor::RestorePosition
         )?;
-        execute!(
-            io::stdout(),
-            cursor::MoveTo(0, index as u16 + 3),
-            Clear(ClearType::CurrentLine),
-            style::Print(format!("正在扫描: {}", entry.path))
-        )?;
         io::stdout().flush()?;
 
         // 计算目录大小
@@ -466,7 +454,7 @@ fn main() -> io::Result<()> {
     disable_raw_mode()?;
     if clean_all {
         for (entry, _) in entries_with_size {
-            println!("正在清理 {}", entry.path);
+            println!("{} {}", "正在清理".green(), entry.path);
             let result = std::fs::remove_dir_all(&entry.path);
             if let Err(e) = result {
                 if e.kind() != io::ErrorKind::NotFound {
@@ -485,7 +473,7 @@ fn walk_and_delete<const N: usize>(
     // should be 30 days
     time_unused: u64,
 ) {
-    for entry in WalkDir::new(&root) {
+    for entry in WalkDir::new(&root).max_depth(5) {
         if let Ok(entry) = entry {
             if let Ok(metadata) = entry.metadata() {
                 if metadata.is_dir() {
@@ -495,7 +483,7 @@ fn walk_and_delete<const N: usize>(
                             metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
                         let mut access_time = metadata.accessed().unwrap_or(SystemTime::UNIX_EPOCH);
                         let mut created_time = metadata.created().unwrap_or(SystemTime::UNIX_EPOCH);
-                        for entry_in_to_del in WalkDir::new(entry.path()) {
+                        for entry_in_to_del in WalkDir::new(entry.path()).max_depth(5) {
                             if let Ok(entry_in_to_del) = entry_in_to_del {
                                 if let Ok(metadata) = entry_in_to_del.metadata() {
                                     if let Ok(modified) = metadata.modified() {
