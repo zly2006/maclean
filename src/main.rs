@@ -6,6 +6,7 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use std::collections::HashMap;
+use std::env;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -149,6 +150,27 @@ fn clean_jetbrains(clean_entries: &mut Vec<CleanEntry>, root: String) {
             keep_dirs.insert(app_name, version);
         }
     }
+    // Loop through the keep_dirs to clean the latest versions
+    if root.contains("Caches") {
+        for (app_name, version) in keep_dirs {
+            let path = format!("{root}/{app_name}{version}");
+            clean_entries.push(CleanEntry {
+                path: format!("{path}/intellij-rust/crates-local-index-cargo-home"),
+                description: format!("{app_name} 的 Rust 插件缓存"),
+                score: 0.8,
+            });
+            clean_entries.push(CleanEntry {
+                path: format!("{path}/intellij-rust/macros"),
+                description: format!("{app_name} 的 Rust 插件缓存"),
+                score: 0.8,
+            });
+            clean_entries.push(CleanEntry {
+                path: format!("{path}/caches"),
+                description: format!("{app_name} 的 IDE 缓存"),
+                score: 0.8,
+            });
+        }
+    }
 }
 
 #[allow(unused)]
@@ -175,6 +197,8 @@ impl ToClean for CleanEntry {
 }
 
 fn main() -> io::Result<()> {
+    let args: Vec<String> = env::args().collect();
+
     let username = whoami::username();
 
     let mut clean_entries: Vec<CleanEntry> = vec![];
@@ -300,6 +324,11 @@ fn main() -> io::Result<()> {
         clean_entries.push(CleanEntry {
             path: format!("/Users/{username}/Library/Caches/typescript"),
             description: "typescript 缓存".into(),
+            score: 1.0,
+        });
+        clean_entries.push(CleanEntry {
+            path: format!("/Users/{username}/Library/Caches/Yarn"),
+            description: "Yarn (yarnpkg) 缓存".into(),
             score: 1.0,
         });
         clean_entries.push(CleanEntry {
