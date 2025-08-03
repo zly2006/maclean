@@ -10,6 +10,7 @@ use std::env;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use pad::PadStr;
 use walkdir::WalkDir;
 
 macro_rules! add_clean_entry {
@@ -436,23 +437,26 @@ fn render_ui(ui_state: &UIState) -> io::Result<()> {
 
         // 当前行背景色和文字样式
         let (name_style, path_style, size_style) = (
-            if is_current {
-                entry.description.clone().black().on_white()
-            } else if is_small_file {
-                entry.description.clone().with(Color::DarkGrey)
-            } else {
-                entry.description.clone().white()
+            {
+                let desc = entry.description.clone().pad_to_width(desc_width);
+                if is_current {
+                    desc.black().on_white()
+                } else if is_small_file {
+                    desc.with(Color::DarkGrey)
+                } else {
+                    desc.white()
+                }
             },
-            truncated_path.with(Color::Cyan),
-            format_size(entry.size.unwrap_or(0)).with(Color::Yellow),
+            truncated_path.pad_to_width(path_width).with(Color::Cyan),
+            format_size(entry.size.unwrap_or(0)).pad_to_width(size_width).with(Color::Yellow),
         );
 
         execute!(
             stdout,
             style::Print(format!("{checkbox} ").with(checkbox_color)),
-            style::Print(format!("{name_style:<desc_width$} ")),
-            style::Print(format!("{path_style:<path_width$} ")),
-            style::Print(format!("{size_style:>size_width$}")),
+            style::Print(format!("{name_style} ")),
+            style::Print(format!("{size_style} ")),
+            style::Print(format!("{path_style}")),
             style::Print("\r\n")
         )?;
     }
@@ -523,7 +527,7 @@ fn show_confirmation_dialog(selected_entries: &[&CleanEntry]) -> io::Result<bool
         style::Print("确认删除".red().bold()),
         style::Print("\r\n\r\n"),
         style::Print(format!(
-            "即将删除 {} 个项目，总大小: {}\n\n",
+            "即将删除 {} 个项目，总大小: {}\r\n",
             selected_entries.len(),
             format_size(total_size)
         )),
@@ -531,7 +535,7 @@ fn show_confirmation_dialog(selected_entries: &[&CleanEntry]) -> io::Result<bool
     )?;
 
     for entry in selected_entries.iter().take(10) {
-        execute!(stdout, style::Print(format!("• {}\n", entry.description)))?;
+        execute!(stdout, style::Print(format!("• {}\\rn", entry.description)))?;
     }
 
     if selected_entries.len() > 10 {
@@ -543,9 +547,9 @@ fn show_confirmation_dialog(selected_entries: &[&CleanEntry]) -> io::Result<bool
 
     execute!(
         stdout,
-        style::Print("\n"),
+        style::Print("\r\n"),
         style::Print("确定要删除这些文件吗？".red().bold()),
-        style::Print("\n"),
+        style::Print("\r\n"),
         style::Print("Y/Enter: 确认删除    N/Esc: 取消".with(Color::DarkGrey))
     )?;
 

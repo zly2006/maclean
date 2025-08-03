@@ -8,6 +8,7 @@ license = "MIT"
 crossterm = "0.29.0"
 walkdir = "2.5.0"
 whoami = "1.6.0"
+pad = "0.1.6"
 
 [features]
 default = []
