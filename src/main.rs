@@ -12,6 +12,30 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use walkdir::WalkDir;
 
+macro_rules! add_clean_entry {
+    ($clean_entries:expr, $path:expr, $desc:expr) => {
+        $clean_entries.push(CleanEntry {
+            path: format!("/Users/{}/{}", whoami::username(), $path),
+            description: $desc.into(),
+            score: 1.0,
+        });
+    };
+    ($clean_entries:expr, $path:expr, $desc:expr, $score:expr) => {
+        $clean_entries.push(CleanEntry {
+            path: format!("/Users/{}/{}", whoami::username(), $path),
+            description: $desc.into(),
+            score: $score,
+        });
+    };
+    ($clean_entries:expr, $username:expr, $path:expr, $desc:expr, $score:expr) => {
+        $clean_entries.push(CleanEntry {
+            path: format!("/Users/{}/{}", $username, $path),
+            description: $desc.into(),
+            score: $score,
+        });
+    };
+}
+
 // 定义一个函数来格式化文件大小
 fn format_size(size: u64) -> String {
     const KIB: u64 = 1024;
@@ -197,47 +221,37 @@ impl ToClean for CleanEntry {
 }
 
 fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
+    let _args: Vec<String> = env::args().collect();
+    let started = std::time::Instant::now();
 
     let username = whoami::username();
+    println!("当前用户：{}", username);
 
-    let mut clean_entries: Vec<CleanEntry> = vec![];
+    let mut clean_entries: Vec<CleanEntry> = Vec::with_capacity(100);
     #[cfg(target_os = "macos")]
     {
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Application Support/Microsoft/EdgeUpdater"),
-            description: "Microsoft Edge 自动更新".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!(
-                "/Users/{username}/Library/Containers/com.tencent.qq/Data/Library/Record"
-            ),
-            description: "QQ 录屏文件".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Group Containers/UBF8T346G9.OneDriveStandaloneSuite/FileProviderLogs"),
-            description: "OneDrive 日志".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Logs/OneDrive"),
-            description: "OneDrive 日志".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!(
-                "/Users/{username}/Library/Containers/com.apple.mediaanalysisd/Data/Library/Caches"
-            ),
-            description: "mediaanalysisd 缓存".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Containers/com.tencent.meeting/Data/Library/Global/Data/DynamicResourcePackage"),
-            description: "腾讯会议下载缓存".into(),
-            score: 1.0,
-        });
+        add_clean_entry!(clean_entries, "Library/Application Support/Microsoft/EdgeUpdater", "Microsoft Edge 自动更新");
+        add_clean_entry!(clean_entries, "Library/Containers/com.tencent.qq/Data/Library/Record", "QQ 录屏文件");
+        add_clean_entry!(clean_entries, "Library/Group Containers/UBF8T346G9.OneDriveStandaloneSuite/FileProviderLogs", "OneDrive 日志");
+        add_clean_entry!(clean_entries, "Library/Logs/OneDrive", "OneDrive 日志");
+        add_clean_entry!(clean_entries, "Library/Containers/com.apple.mediaanalysisd/Data/Library/Caches", "mediaanalysisd 缓存");
+        add_clean_entry!(clean_entries, "Library/Containers/com.tencent.meeting/Data/Library/Global/Data/DynamicResourcePackage", "腾讯会议下载缓存");
+        add_clean_entry!(clean_entries, "Library/Application Support/Caches", "应用程序支持缓存");
+        add_clean_entry!(clean_entries, "Library/Containers/com.tencent.meeting/Data/Library/Global", "腾讯会议全局数据");
+        add_clean_entry!(clean_entries, "Library/Application Support/Adobe/Common/Media Cache Files", "Adobe Media Cache");
+        add_clean_entry!(clean_entries, "Library/Application Support/Adobe/Common/Media Cache", "Adobe Media Cache");
+        add_clean_entry!(clean_entries, "Library/Application Support/zoom.us/AutoUpdater", "Zoom 自动更新");
+        add_clean_entry!(clean_entries, "Library/Logs/JetBrains", "JetBrains 日志");
+        add_clean_entry!(clean_entries, "Library/Caches/Microsoft Edge", "Microsoft Edge 缓存");
+        add_clean_entry!(clean_entries, "Library/Caches/Google/Chrome", "Google Chrome 缓存");
+        add_clean_entry!(clean_entries, "Library/Caches/Google/Jib", "Google Jib 缓存");
+        add_clean_entry!(clean_entries, "Library/Caches/com.hnc.Discord.ShipIt", "Discord 自动更新缓存");
+        add_clean_entry!(clean_entries, "Library/Caches/ms-playwright", "Playwright 缓存");
+        add_clean_entry!(clean_entries, "Library/Caches/Homebrew/downloads", "Homebrew 下载缓存");
+        #[cfg(feature = "experimental")]
+        add_clean_entry!(clean_entries, "Library/Caches/typescript", "typescript 缓存");
+        add_clean_entry!(clean_entries, "Library/Caches/Yarn", "Yarn (yarnpkg) 缓存");
+        add_clean_entry!(clean_entries, "Library/Caches/electron", "未知来源 electron 二进制缓存");
         clean_electron(
             &mut clean_entries,
             format!("/Users/{username}/Library/Application Support/Code"),
@@ -268,88 +282,7 @@ fn main() -> io::Result<()> {
             format!("/Users/{username}/Library/Application Support/quark-cloud-drive"),
             "夸克网盘",
         );
-        clean_entries.push(CleanEntry {
-            path: format!(
-                "/Users/{username}/Library/Application Support/Adobe/Common/Media Cache Files"
-            ),
-            description: "Adobe Media Cache".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Application Support/Adobe/Common/Media Cache"),
-            description: "Adobe Media Cache".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Application Support/zoom.us/AutoUpdater"),
-            description: "Zoom 自动更新".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Logs/JetBrains"),
-            description: "JetBrains 日志".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Caches/Microsoft Edge"),
-            description: "Microsoft Edge 缓存".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Caches/Google/Chrome"),
-            description: "Google Chrome 缓存".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Caches/Google/Jib"),
-            description: "Google Jib 缓存".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Caches/com.hnc.Discord.ShipIt"),
-            description: "Discord 自动更新缓存".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Caches/ms-playwright"),
-            description: "Playwright 缓存".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Caches/Homebrew/downloads"),
-            description: "Homebrew 下载缓存".into(),
-            score: 1.0,
-        });
-        #[cfg(feature = "experimental")]
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Caches/typescript"),
-            description: "typescript 缓存".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Caches/Yarn"),
-            description: "Yarn (yarnpkg) 缓存".into(),
-            score: 1.0,
-        });
-        clean_entries.push(CleanEntry {
-            path: format!("/Users/{username}/Library/Caches/electron"),
-            description: "未知来源 electron 二进制缓存".into(),
-            score: 1.0,
-        });
-        if let Ok(read_dir) = std::fs::read_dir(format!("/Users/{username}/IdeaProjects")) {
-            for entry in read_dir {
-                if let Ok(entry) = entry {
-                    if entry.metadata()?.is_dir() {
-                        walk_and_delete(
-                            &mut clean_entries,
-                            [".gradle", "out", "build"],
-                            entry.path(),
-                            30 * 24 * 60 * 60,
-                        )
-                    }
-                }
-            }
-        }
+        clean_idea_projects(&mut clean_entries, &format!("/Users/{username}/IdeaProjects"))?;
         #[cfg(feature = "experimental")]
         if let Ok(read_dir) = std::fs::read_dir(format!("/Users/{username}/WebstormProjects")) {
             for entry in read_dir {
@@ -398,7 +331,7 @@ fn main() -> io::Result<()> {
         );
     }
 
-    println!("当前用户：{}", username);
+    println!("time: {:?}", started.elapsed());
     println!("开始扫描磁盘空间占用情况...\n");
 
     enable_raw_mode()?;
@@ -495,6 +428,25 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
+fn clean_idea_projects(mut clean_entries: &mut Vec<CleanEntry>, path: &str) -> io::Result<()> {
+    let read_dir = std::fs::read_dir(path)?;
+    println!("正在清理 IntelliJ IDEA 项目目录: {}", path);
+
+    for entry in read_dir {
+        if let Ok(entry) = entry { // Skip error
+            if entry.metadata()?.is_dir() {
+                walk_and_delete(
+                    &mut clean_entries,
+                    [".gradle", "out", "build"],
+                    entry.path(),
+                    30 * 24 * 60 * 60,
+                )
+            }
+        }
+    }
+    Ok(())
+}
+
 fn walk_and_delete<const N: usize>(
     clean_entries: &mut Vec<CleanEntry>,
     to_delete: [&str; N],
@@ -502,7 +454,7 @@ fn walk_and_delete<const N: usize>(
     // should be 30 days
     time_unused: u64,
 ) {
-    for entry in WalkDir::new(&root).max_depth(5) {
+    for entry in WalkDir::new(&root).max_depth(2) {
         if let Ok(entry) = entry {
             if let Ok(metadata) = entry.metadata() {
                 if metadata.is_dir() {
