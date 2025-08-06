@@ -535,7 +535,7 @@ fn show_confirmation_dialog(selected_entries: &[&CleanEntry]) -> io::Result<bool
     )?;
 
     for entry in selected_entries.iter().take(10) {
-        execute!(stdout, style::Print(format!("• {}\\rn", entry.description)))?;
+        execute!(stdout, style::Print(format!("• {}\r\n", entry.description)))?;
     }
 
     if selected_entries.len() > 10 {
