@@ -5,12 +5,12 @@ use crossterm::{
     style::{self, Color, Stylize},
     terminal::{Clear, ClearType},
 };
+use pad::PadStr;
 use std::collections::HashMap;
 use std::env;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use pad::PadStr;
 use walkdir::WalkDir;
 
 macro_rules! add_clean_entry {
@@ -236,10 +236,10 @@ struct CleanEntry {
 // 交互式UI状态
 struct UIState {
     entries: Vec<CleanEntry>,
-    current_index: usize,
-    scroll_offset: usize,
-    terminal_height: usize,
-    terminal_width: usize,
+    current_index: u16,
+    scroll_offset: u16,
+    terminal_height: u16,
+    terminal_width: u16,
     total_selected_size: u64,
     selected_count: usize,
     show_small_files: bool, // 是否显示小于10MB的文件
@@ -252,15 +252,15 @@ impl UIState {
             entries,
             current_index: 0,
             scroll_offset: 0,
-            terminal_height: height as usize,
-            terminal_width: width as usize,
+            terminal_height: height,
+            terminal_width: width,
             total_selected_size: 0,
             selected_count: 0,
             show_small_files: false, // 默认隐藏小文件
         })
     }
 
-    fn visible_height(&self) -> usize {
+    fn visible_height(&self) -> u16 {
         // 保留空间给标题和状态栏
         self.terminal_height.saturating_sub(4)
     }
@@ -279,7 +279,7 @@ impl UIState {
 
     fn toggle_current_selection(&mut self) {
         let visible_entries = self.get_visible_entries();
-        if let Some((actual_index, _)) = visible_entries.get(self.current_index) {
+        if let Some((actual_index, _)) = visible_entries.get(self.current_index as usize) {
             let actual_index = *actual_index;
             drop(visible_entries);
             if let Some(entry) = self.entries.get_mut(actual_index) {
@@ -338,7 +338,7 @@ impl UIState {
 
     fn move_down(&mut self) {
         let visible_entries = self.get_visible_entries();
-        if self.current_index < visible_entries.len().saturating_sub(1) {
+        if self.current_index < visible_entries.len().saturating_sub(1) as u16 {
             self.current_index += 1;
             let visible_height = self.visible_height();
             if self.current_index >= self.scroll_offset + visible_height {
@@ -356,7 +356,7 @@ impl UIState {
     fn page_down(&mut self) {
         let page_size = self.visible_height();
         let visible_entries = self.get_visible_entries();
-        let max_index = visible_entries.len().saturating_sub(1);
+        let max_index = visible_entries.len().saturating_sub(1) as u16;
         self.current_index = (self.current_index + page_size).min(max_index);
 
         let visible_height = self.visible_height();
@@ -387,26 +387,30 @@ fn render_ui(ui_state: &UIState) -> io::Result<()> {
     )?;
 
     let visible_entries = ui_state.get_visible_entries();
-    let visible_height = ui_state.visible_height();
-    let start_index = ui_state.scroll_offset;
+    let visible_height = ui_state.visible_height() as usize;
+    let start_index = ui_state.scroll_offset as usize;
     let end_index = (start_index + visible_height).min(visible_entries.len());
 
     // 渲染项目列表
     let items_display = &visible_entries[start_index..end_index];
     let desc_width = items_display
         .iter()
-        .map(|(_, entry)| entry.description.len())
+        .map(|(_, entry)| entry.description.len() as u16)
         .max()
         .unwrap_or(0);
     let size_width = items_display
         .iter()
-        .map(|(_, entry)| entry.size.map_or(0, |s| format_size(s).len()))
+        .map(|(_, entry)| entry.size.map_or(0, |s| format_size(s).len()) as u16)
         .max()
         .unwrap_or(0);
-    let path_width = ui_state.terminal_width - desc_width - size_width - 10; // 10 for checkbox and padding
+    let path_width = ui_state
+        .terminal_width
+        .saturating_sub(desc_width)
+        .saturating_sub(size_width)
+        .saturating_sub(10); // 10 for checkbox and padding
     for (i, (_, entry)) in items_display.iter().enumerate() {
         let display_index = start_index + i;
-        let is_current = display_index == ui_state.current_index;
+        let is_current = display_index as u16 == ui_state.current_index;
 
         // 判断文件大小是否小于10MB
         let is_small_file = entry.size.unwrap_or(0) < 10 * 1024 * 1024;
@@ -423,13 +427,13 @@ fn render_ui(ui_state: &UIState) -> io::Result<()> {
         };
 
         // 截断和格式化路径
-        let truncated_path = if entry.path.len() > path_width {
+        let truncated_path = if entry.path.len() as u16 > path_width {
             format!(
                 "...{}",
                 &entry.path[entry
                     .path
                     .len()
-                    .saturating_sub(path_width.saturating_sub(3))..]
+                    .saturating_sub(path_width.saturating_sub(3) as usize)..]
             )
         } else {
             entry.path.clone()
@@ -438,7 +442,7 @@ fn render_ui(ui_state: &UIState) -> io::Result<()> {
         // 当前行背景色和文字样式
         let (name_style, path_style, size_style) = (
             {
-                let desc = entry.description.clone().pad_to_width(desc_width);
+                let desc = entry.description.clone().pad_to_width(desc_width as usize);
                 if is_current {
                     desc.black().on_white()
                 } else if is_small_file {
@@ -447,8 +451,16 @@ fn render_ui(ui_state: &UIState) -> io::Result<()> {
                     desc.white()
                 }
             },
-            truncated_path.pad_to_width(path_width).with(Color::Cyan),
-            format_size(entry.size.unwrap_or(0)).pad_to_width(size_width).with(Color::Yellow),
+            if path_width > 7 {
+                truncated_path
+                    .pad_to_width(path_width as usize)
+                    .with(Color::Cyan)
+            } else {
+                "".to_string().with(Color::Yellow)
+            },
+            format_size(entry.size.unwrap_or(0))
+                .pad_to_width(size_width as usize)
+                .with(Color::Yellow),
         );
 
         execute!(
@@ -880,55 +892,63 @@ fn main() -> io::Result<()> {
     loop {
         render_ui(&ui_state)?;
 
-        if let Event::Key(key_event) = crossterm::event::read()? {
-            match key_event.code {
-                // 导航控制
-                KeyCode::Up => ui_state.move_up(),
-                KeyCode::Down => ui_state.move_down(),
-                KeyCode::PageUp => ui_state.page_up(),
-                KeyCode::PageDown => ui_state.page_down(),
+        match crossterm::event::read()? {
+            Event::Key(key_event) => {
+                match key_event.code {
+                    // 导航控制
+                    KeyCode::Up => ui_state.move_up(),
+                    KeyCode::Down => ui_state.move_down(),
+                    KeyCode::PageUp => ui_state.page_up(),
+                    KeyCode::PageDown => ui_state.page_down(),
 
-                // 选择控制
-                KeyCode::Char(' ') => ui_state.toggle_current_selection(),
+                    // 选择控制
+                    KeyCode::Char(' ') => ui_state.toggle_current_selection(),
 
-                // 全选/取消全选
-                KeyCode::Char('a') | KeyCode::Char('A')
-                    if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
-                {
-                    ui_state.select_all();
-                }
-                KeyCode::Char('d') | KeyCode::Char('D')
-                    if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
-                {
-                    ui_state.deselect_all();
-                }
-
-                // 切换小文件显示
-                KeyCode::Char('s') | KeyCode::Char('S') => {
-                    ui_state.toggle_small_files_display();
-                }
-
-                // 确认删除
-                KeyCode::Enter => {
-                    let selected_entries = ui_state.get_selected_entries();
-                    if selected_entries.is_empty() {
-                        continue; // 没有选中任何项目
+                    // 全选/取消全选
+                    KeyCode::Char('a') | KeyCode::Char('A')
+                        if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
+                        ui_state.select_all();
+                    }
+                    KeyCode::Char('d') | KeyCode::Char('D')
+                        if key_event.modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
+                        ui_state.deselect_all();
                     }
 
-                    // 显示确认对话框
-                    if show_confirmation_dialog(&selected_entries)? {
-                        // 执行删除
-                        execute_cleanup(&selected_entries)?;
-                        break;
+                    // 切换小文件显示
+                    KeyCode::Char('s') | KeyCode::Char('S') => {
+                        ui_state.toggle_small_files_display();
                     }
-                    // 如果取消删除，继续显示主界面
+
+                    // 确认删除
+                    KeyCode::Enter => {
+                        let selected_entries = ui_state.get_selected_entries();
+                        if selected_entries.is_empty() {
+                            continue; // 没有选中任何项目
+                        }
+
+                        // 显示确认对话框
+                        if show_confirmation_dialog(&selected_entries)? {
+                            // 执行删除
+                            execute_cleanup(&selected_entries)?;
+                            break;
+                        }
+                        // 如果取消删除，继续显示主界面
+                    }
+
+                    // 退出程序
+                    KeyCode::Esc | KeyCode::Char('q') => break,
+
+                    _ => {} // 忽略其他按键
                 }
-
-                // 退出程序
-                KeyCode::Esc | KeyCode::Char('q') => break,
-
-                _ => {} // 忽略其他按键
             }
+            Event::Resize(width, height) => {
+                // 更新终端大小
+                ui_state.terminal_width = width;
+                ui_state.terminal_height = height;
+            }
+            _ => {}
         }
     }
 
