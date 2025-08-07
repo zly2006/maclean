@@ -25,33 +25,6 @@ macro_rules! add_clean_entry {
             selected: false,
         });)+
     };
-    // ($clean_entries:expr, $path:expr, $desc:expr) => {
-    //     $clean_entries.push(CleanEntry {
-    //         path: format!("/Users/{}/{}", whoami::username(), $path),
-    //         description: $desc.into(),
-    //         score: 1.0,
-    //         size: None,
-    //         selected: false,
-    //     });
-    // };
-    // ($clean_entries:expr, $path:expr, $desc:expr, $score:expr) => {
-    //     $clean_entries.push(CleanEntry {
-    //         path: format!("/Users/{}/{}", whoami::username(), $path),
-    //         description: $desc.into(),
-    //         score: $score,
-    //         size: None,
-    //         selected: false,
-    //     });
-    // };
-    // ($clean_entries:expr, $username:expr, $path:expr, $desc:expr, $score:expr) => {
-    //     $clean_entries.push(CleanEntry {
-    //         path: format!("/Users/{}/{}", $username, $path),
-    //         description: $desc.into(),
-    //         score: $score,
-    //         size: None,
-    //         selected: false,
-    //     });
-    // };
 }
 
 // 定义一个函数来格式化文件大小
