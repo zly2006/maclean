@@ -14,33 +14,44 @@ use std::time::SystemTime;
 use walkdir::WalkDir;
 
 macro_rules! add_clean_entry {
-    ($clean_entries:expr, $path:expr, $desc:expr) => {
-        $clean_entries.push(CleanEntry {
-            path: format!("/Users/{}/{}", whoami::username(), $path),
+    ($clean_entries:expr, $username:expr, $(
+        ($path:expr, $desc:expr),
+    )+) => {
+        $($clean_entries.push(CleanEntry {
+            path: format!("/Users/{}/{}", $username, $path),
             description: $desc.into(),
             score: 1.0,
             size: None,
             selected: false,
-        });
+        });)+
     };
-    ($clean_entries:expr, $path:expr, $desc:expr, $score:expr) => {
-        $clean_entries.push(CleanEntry {
-            path: format!("/Users/{}/{}", whoami::username(), $path),
-            description: $desc.into(),
-            score: $score,
-            size: None,
-            selected: false,
-        });
-    };
-    ($clean_entries:expr, $username:expr, $path:expr, $desc:expr, $score:expr) => {
-        $clean_entries.push(CleanEntry {
-            path: format!("/Users/{}/{}", $username, $path),
-            description: $desc.into(),
-            score: $score,
-            size: None,
-            selected: false,
-        });
-    };
+    // ($clean_entries:expr, $path:expr, $desc:expr) => {
+    //     $clean_entries.push(CleanEntry {
+    //         path: format!("/Users/{}/{}", whoami::username(), $path),
+    //         description: $desc.into(),
+    //         score: 1.0,
+    //         size: None,
+    //         selected: false,
+    //     });
+    // };
+    // ($clean_entries:expr, $path:expr, $desc:expr, $score:expr) => {
+    //     $clean_entries.push(CleanEntry {
+    //         path: format!("/Users/{}/{}", whoami::username(), $path),
+    //         description: $desc.into(),
+    //         score: $score,
+    //         size: None,
+    //         selected: false,
+    //     });
+    // };
+    // ($clean_entries:expr, $username:expr, $path:expr, $desc:expr, $score:expr) => {
+    //     $clean_entries.push(CleanEntry {
+    //         path: format!("/Users/{}/{}", $username, $path),
+    //         description: $desc.into(),
+    //         score: $score,
+    //         size: None,
+    //         selected: false,
+    //     });
+    // };
 }
 
 // 定义一个函数来格式化文件大小
@@ -655,101 +666,43 @@ fn main() -> io::Result<()> {
     println!("当前用户：{username}");
 
     let mut clean_entries: Vec<CleanEntry> = Vec::with_capacity(100);
+
+    #[cfg(target_os = "macos")]
+    add_clean_entry! {
+        clean_entries, username,
+        ("Library/Caches/Microsoft Edge", "Microsoft Edge 缓存"),
+        ("Library/Caches/Google/Chrome", "Google Chrome 缓存"),
+        ("Library/Caches/Google/Jib", "Google Jib 缓存"),
+        ("Library/Caches/com.hnc.Discord.ShipIt", "Discord 自动更新缓存"),
+        ("Library/Caches/ms-playwright", "Playwright 缓存"),
+        ("Library/Caches/Homebrew/downloads", "Homebrew 下载缓存"),
+        ("Library/Containers/com.microsoft.onenote.mac/Data/Library/Logs", "OneNote 日志"),
+        ("Library/Containers/com.microsoft.Powerpoint/Data/Library/Logs", "PowerPoint 日志"),
+        ("Library/Containers/com.shangguanyangguang.MyZip/Data/tmp", "MyZip 临时文件"),
+        ("Library/Containers/com.netease.163music/Data/Library/Caches", "网易云音乐缓存"),
+        ("Library/Caches/Yarn", "Yarn (yarnpkg) 缓存"),
+        ("Library/Caches/electron", "未知来源 electron 二进制缓存"),
+        ("Library/Application Support/Microsoft/EdgeUpdater", "Microsoft Edge 自动更新"),
+        ("Library/Containers/com.tencent.qq/Data/Library/Record", "QQ 录屏文件"),
+        ("Library/Group Containers/UBF8T346G9.OneDriveStandaloneSuite/FileProviderLogs", "OneDrive 日志"),
+        ("Library/Logs/OneDrive", "OneDrive 日志"),
+        ("Library/Containers/com.apple.mediaanalysisd/Data/Library/Caches", "mediaanalysisd 缓存"),
+        ("Library/Containers/com.tencent.meeting/Data/Library/Global/Data/DynamicResourcePackage",
+        "腾讯会议下载缓存"),
+        ("Library/Application Support/Caches", "不知道什么应用的缓存"),
+        ("Library/Containers/com.tencent.meeting/Data/Library/Global/Logs", "腾讯会议日志"),
+        ("Library/Application Support/Adobe/Common/Media Cache Files", "Adobe Media Cache"),
+        ("Library/Application Support/Adobe/Common/Media Cache", "Adobe Media Cache"),
+        ("Library/Application Support/zoom.us/AutoUpdater", "Zoom 自动更新"),
+        ("Library/Logs/JetBrains", "JetBrains 日志"),
+    }
     #[cfg(target_os = "macos")]
     {
-        add_clean_entry!(
-            clean_entries,
-            "Library/Application Support/Microsoft/EdgeUpdater",
-            "Microsoft Edge 自动更新"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Containers/com.tencent.qq/Data/Library/Record",
-            "QQ 录屏文件"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Group Containers/UBF8T346G9.OneDriveStandaloneSuite/FileProviderLogs",
-            "OneDrive 日志"
-        );
-        add_clean_entry!(clean_entries, "Library/Logs/OneDrive", "OneDrive 日志");
-        add_clean_entry!(
-            clean_entries,
-            "Library/Containers/com.apple.mediaanalysisd/Data/Library/Caches",
-            "mediaanalysisd 缓存"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Containers/com.tencent.meeting/Data/Library/Global/Data/DynamicResourcePackage",
-            "腾讯会议下载缓存"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Application Support/Caches",
-            "应用程序支持缓存"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Containers/com.tencent.meeting/Data/Library/Global/Logs",
-            "腾讯会议日志"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Application Support/Adobe/Common/Media Cache Files",
-            "Adobe Media Cache"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Application Support/Adobe/Common/Media Cache",
-            "Adobe Media Cache"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Application Support/zoom.us/AutoUpdater",
-            "Zoom 自动更新"
-        );
-        add_clean_entry!(clean_entries, "Library/Logs/JetBrains", "JetBrains 日志");
-        add_clean_entry!(
-            clean_entries,
-            "Library/Caches/Microsoft Edge",
-            "Microsoft Edge 缓存"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Caches/Google/Chrome",
-            "Google Chrome 缓存"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Caches/Google/Jib",
-            "Google Jib 缓存"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Caches/com.hnc.Discord.ShipIt",
-            "Discord 自动更新缓存"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Caches/ms-playwright",
-            "Playwright 缓存"
-        );
-        add_clean_entry!(
-            clean_entries,
-            "Library/Caches/Homebrew/downloads",
-            "Homebrew 下载缓存"
-        );
         #[cfg(feature = "experimental")]
         add_clean_entry!(
             clean_entries,
             "Library/Caches/typescript",
             "typescript 缓存"
-        );
-        add_clean_entry!(clean_entries, "Library/Caches/Yarn", "Yarn (yarnpkg) 缓存");
-        add_clean_entry!(
-            clean_entries,
-            "Library/Caches/electron",
-            "未知来源 electron 二进制缓存"
         );
         clean_electron(
             &mut clean_entries,
